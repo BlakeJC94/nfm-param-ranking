@@ -2,3 +2,8 @@ name = "NfmParamRanking"
 uuid = "e14782af-0283-46e7-8220-d81ff0649b7b"
 authors = ["BlakeJC94 <blakejamescook@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+QuasiMonteCarlo = "8a4e6c94-4038-4cdc-81c3-7e6ffdb2a71b"
