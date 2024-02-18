@@ -1,5 +1,7 @@
 module NfmParamRanking
 
-greet() = print("Hello World!")
+function main()
+    println("Hello World!")
+end
 
 end # module NfmParamRanking
