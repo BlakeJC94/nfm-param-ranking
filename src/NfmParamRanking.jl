@@ -4,8 +4,8 @@ include("./GenerateData.jl")
 include("./AnalyseResults.jl")
 
 function main()
-    GenerateData.main()
-    AnalyseResults.main()
+    data, labels = GenerateData.main()
+    output = AnalyseResults.main(data)
 end
 
 end # module NfmParamRanking

@@ -28,7 +28,7 @@ function main()
 
     # TODO Solve each equation and save results to file
     @info "Solving model for each configuration"
-    results = []
+    data = []
     for i = 1:N
         @info "sim $(i)"
         if i % 100 == 0
@@ -43,13 +43,14 @@ function main()
         sol = solve(prob, DP5(), dt=dt, adaptive=false)
 
         Y = sol[2,:][T0*Fs:end] - sol[3,:][T0*Fs:end] - sol[4,:][T0*Fs:end]
-        push!(results, Y)
-        # TODO Save?
+        push!(data, Y)
     end
-    return results
 
-    # TODO Skip if all results have been generated
-    #
+    @info "Classifying simluations"
+    # TODO Classify simulations
+    labels = []
+
+    return transpose(param_configs), labels
 end
 
 # %%
