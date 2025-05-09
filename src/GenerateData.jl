@@ -3,29 +3,32 @@ module GenerateData
 # %%
 using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks
 
-function main()::Tuple{Matrix{Real}, Matrix{Real}}
-    N = 5 # 2_000_000
-    min_max_vals = [
-        0.0 10.0;  # A
-        0.0 50.0;  # B
-        0.0 50.0;  # G
-        0.0 2000.0;  # P
-        25.0 140.0;  # a
-        6.5 110.0;  # b
-        350.0 650.0;  # g
-        0.0 1350.0;  # c
-        2.0 9.0;  # v_0
-        0.5 7.5;  # e_0
-        0.3 0.8  # r
-    ]
-    T = 20  # Max simulation time
-    T0 = 10  # Transient end time (discard signal up to this t value)
-    Fs = 500  # Sampling frequency
+struct ParameterRange
+    name::Symbol
+    min::Float64
+    max::Float64
+end
 
+struct SimulationConfig
+    T0::Float64  # Transient end time (discard signal up to this t value)
+    T::Float64   # Max simulation time
+    Fs::Float64  # Sampling frequency
+end
+
+struct Config
+    N::Int64
+    simulation_config::SimulationConfig
+    param_ranges::Vector{ParameterRange}
+end
+
+
+function main(config::Config)::Tuple{Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
     @info "Generating parameter space"
-    param_configs = generate_hypercube(min_max_vals, N)
+    param_configs = generate_hypercube(
+        config.param_ranges,
+        config.N
+    )
 
-    # TODO Solve each equation and save results to file
     @info "Solving model for each configuration"
     solutions = []
     data = []
@@ -33,8 +36,12 @@ function main()::Tuple{Matrix{Real}, Matrix{Real}}
         if i % 100 == 0
             @info "sim $(i)"
         end
-        Y = solve_eq(jansen_ritt_wendling!, param_configs[i, :], Fs, T0, T)
-        characteristics = extract_characteristics(Y, Fs, T0, T)
+        Y = solve_eq(
+            jansen_ritt_wendling!,
+            param_configs[i, :],
+            config.simulation_config,
+        )
+        characteristics = extract_characteristics(Y, config.simulation_config)
         push!(solutions, Y)
         push!(data, characteristics)
     end
@@ -45,8 +52,7 @@ function main()::Tuple{Matrix{Real}, Matrix{Real}}
     steadystate = discretize(data[:,1], [0, 0.1, 10000])
 
     labels = hcat(data, seizure, steadystate)
-
-    return param_configs, labels
+    return param_configs, labels, simulations
 end
 
 # %%
@@ -77,10 +83,10 @@ end
 
 function extract_characteristics(
     Y::Vector{Float64},
-    Fs::Real,
-    T0::Real,
-    T::Real,
+    simulation_config::SimulationConfig,
 )::Tuple{Real, Real, Real}
+    Fs, T0, T = simulation_config.Fs, simulation_config.T0, simulation_config.T
+
     L = length(Y)
     P1 = spect(Y)
     amplitude = maximum(Y) - minimum(Y)
@@ -114,15 +120,23 @@ end
 
 # %%
 
-function solve_eq(func::Function, param_config::Vector{Float64}, Fs::Int64, T0::Int64, T::Int64)::Vector{Float64}
-    dt = 1/Fs  # Sampling period
-    y0 = zeros(10, 1)  # Initial conditions
+function solve_eq(
+    func::Function,
+    param_config::Vector{Float64},
+    simulation_config::SimulationConfig,
+)::Vector{Float64}
+    Fs, T0, T = simulation_config.Fs, simulation_config.T0, simulation_config.T
+    dt = 1 / Fs  # Sampling period
+    y0 = zeros(length(param_config), 1)  # Initial conditions
 
     prob = ODEProblem(func, y0, (0, T), param_config)
     sol = solve(prob, DP5(), dt=dt, adaptive=false)
 
-    return sol[2,:][T0*Fs:end] - sol[3,:][T0*Fs:end] - sol[4,:][T0*Fs:end]
+    start_idx = Int(T0 * Fs)
+    y = sol[2,:] - sol[3,:] - sol[4,:]
+    return y[start_idx:end]
 end
+
 # %%
 
 """
@@ -131,12 +145,18 @@ end
 Generate a random Latin Hypercube with `N` points embedded in `d` dimensions within the ranges
 specified by the `(2 x d)` matrix `min_max_vals`.
 """
-function generate_hypercube(min_max_vals::AbstractArray{Float64,2}, N::Int)::Matrix{Float64}
-    d, _ = size(min_max_vals)
+function generate_hypercube(
+    param_ranges::Vector{ParameterRange},
+    N::Int64,
+)::Matrix{Float64}
+    d = length(param_ranges)
 
-    min_vals = min_max_vals[:, 1]
-    range = min_max_vals[:, 2] - min_vals
+    min_vals = getfeld.(param_ranges, :min)
+    max_vals = getfeld.(param_ranges, :max)
+
+    range = max_vals - min_vals
     @assert all(range .> 0)
+
     scale = diagm(range)
 
     sampler = QuasiMonteCarlo.LatinHypercubeSample()
@@ -144,21 +164,6 @@ function generate_hypercube(min_max_vals::AbstractArray{Float64,2}, N::Int)::Mat
 
     return transpose(min_vals .+ scale * res)
 end
-
-# """
-#     generate_hypercube(N::Int, d::Int)::Matrix{Float64}
-
-# Generate a random Latin Hypercube with `N` points embedded in `d` dimensions within the ranges
-# `[0, 1]` for each dimension.
-# """
-# function generate_hypercube(N::Int, d::Int)::Matrix{Float64}
-#     min_max_vals = zeros((2, d))
-#     min_max_vals[2, :] .= 1
-#     return generate_hypercube(N, d, min_max_vals)
-# end
-
-# # %%
-
 
 function discretize(
     data::AbstractVector{T},
@@ -176,7 +181,6 @@ average pulse density of action potentials outgoing from the population.
 sig(v, v0, e0, r) = 2 * e0 / (1 + exp(r * (v0 - v)))
 
 
-# TODO Finish docs
 """
     jansen_ritt_wendling!(dy, y, p, t)
 
@@ -190,7 +194,12 @@ the interactions between them.
 
 Written for use with `DifferentialEquations.jl`
 """
-function jansen_ritt_wendling!(dy, y, p, t)
+function jansen_ritt_wendling!(
+    dy::AbstractVector{T},
+    y::AbstractVector{T},
+    p::AbstractVector{T},
+    t::T,
+)::AbstractVector{T} where {T <: Real}
     y1, y2, y3, y4, y5, y6, y7, y8, y9, y10 = y
 
     A, B, G = p[1:3]
