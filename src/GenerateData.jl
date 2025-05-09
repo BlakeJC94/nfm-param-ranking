@@ -1,21 +1,21 @@
 module GenerateData
 
 # %%
-using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks
+using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks, Parameters
 
-struct ParameterRange
+@with_kw struct ParameterRange
     name::Symbol
     min::Float64
     max::Float64
 end
 
-struct SimulationConfig
+@with_kw struct SimulationConfig
     T0::Float64  # Transient end time (discard signal up to this t value)
     T::Float64   # Max simulation time
     Fs::Float64  # Sampling frequency
 end
 
-struct Config
+@with_kw struct Config
     N::Int64
     simulation_config::SimulationConfig
     param_ranges::Vector{ParameterRange}
@@ -178,7 +178,9 @@ end
 A sigmoid function that relates the average postsynaptic potential of a given population to an
 average pulse density of action potentials outgoing from the population.
 """
-sig(v, v0, e0, r) = 2 * e0 / (1 + exp(r * (v0 - v)))
+function sig(v::T, v0::T, e0::T, r::T)::T where T<:Real
+    return 2 * e0 / (1 + exp(r * (v0 - v)))
+end
 
 
 """
