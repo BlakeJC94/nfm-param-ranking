@@ -3,9 +3,15 @@ module NfmParamRanking
 include("./GenerateData.jl")
 include("./AnalyseResults.jl")
 
+using FileIO
+
+using HDF5
+
 using .GenerateData: Config, SimulationConfig, ParameterRange
 
 function main()
+    results_path = "./results.h5"
+
     config = Config(
         N=5,  # 2_000_000
         simulation_config=SimulationConfig(
@@ -28,8 +34,100 @@ function main()
         ],
     )
 
-    param_configs, labels, simulations = GenerateData.main(config)
+    if isfile(results_path)
+        loaded_config, param_configs, labels, simulations = load_results(results_path)
+        if loaded_config != config
+            @error "Loaded config doesn't match defined config"
+            return
+        end
+    else
+        param_configs, labels, simulations = GenerateData.main(config)
+        save_results(
+            results_path,
+            config,
+            param_configs,
+            labels,
+            simulations,
+        )
+    end
+
     output = AnalyseResults.main(param_configs, labels)
+end
+
+function save_results(
+    results_path::String,
+    config::Config,
+    param_configs::Matrix{Real},,
+    labels::Matric{Real},
+    simulations::Vector{Vector{Float64}},
+)
+    h5open(results_path, "w") do file
+        file["param_configs"] = param_configs
+        file["labels"] = labels
+        sim_group = create_group(file, "simulations")
+
+        n_digits = length(string(length(simulations)))
+        for (i, sim) in enumerate(simulations)
+            sim_group[@sprintf("%0*d", n_digits, i)] = sim
+        end
+
+        g = create_group(h5file, "config")
+
+        g["N"] = config.N
+        g["simulation/T0"] = config.simulation_config.T0
+        g["simulation/T"]  = config.simulation_config.T
+        g["simulation/Fs"] = config.simulation_config.Fs
+
+        # Store parameter ranges as a dataset of strings/floats
+        names = [string(p.name) for p in config.param_ranges]
+        mins = [p.min for p in config.param_ranges]
+        maxs = [p.max for p in config.param_ranges]
+
+        g["param_ranges/names"] = names
+        g["param_ranges/mins"] = mins
+        g["param_ranges/maxs"] = maxs
+    end
+end
+
+function load_results(
+    results_path::str,
+)::Tuple{Config, Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
+    @info "loading results"
+
+    param_configs = Matrix{Float64}(undef, 0, 0)
+    labels = Matrix{Float64}(undef, 0, 0)
+    simulations = Vector{Vector{Float64}}()
+
+    h5open(results_path, "r") do file
+        param_configs = read(file["param_configs"])
+        labels = read(file["labels"])
+
+        sim_group = file["simulations"]
+        n_sims = length(keys(sim_group))
+        simulations = Vector{Vector{Float64}}(undef, n_sims)
+
+        for (i, name) in enumerate(sort(collect(keys(sim_group))))
+            simulations[i] = read(sim_group[name])
+        end
+    end
+
+    g = h5file["config"]
+
+    N = read(g["N"])
+    T0 = read(g["simulation/T0"])
+    T = read(g["simulation/T"])
+    Fs = read(g["simulation/Fs"])
+    sim_config = SimulationConfig(T0=T0, T=T, Fs=Fs)
+
+    names = Symbol.(read(g["param_ranges/names"]))
+    mins = read(g["param_ranges/mins"])
+    maxs = read(g["param_ranges/maxs"])
+
+    param_ranges = [ParameterRange(name=names[i], min=mins[i], max=maxs[i])
+                    for i in eachindex(names)]
+
+    config = Config(N=N, simulation_config=sim_config, param_ranges=param_ranges)
+    return config, param_configs, labels, simulations
 end
 
 end # module NfmParamRanking
