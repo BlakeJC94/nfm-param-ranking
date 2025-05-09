@@ -100,8 +100,12 @@ function main()
         ],
         param_configs,
     )
+
+    # TODO print results
+    # TODO save results
 end
 
+# TODO utils
 function save_results(
     results_path::String,
     config::Config,
@@ -137,6 +141,7 @@ function save_results(
     end
 end
 
+# TODO utils
 function load_results(
     results_path::str,
 )::Tuple{Config, Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
