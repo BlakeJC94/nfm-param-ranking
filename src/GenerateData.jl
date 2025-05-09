@@ -6,7 +6,7 @@ using ..Types
 
 function main(
     config::Config,
-)::Tuple{Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
+)::Tuple{Matrix{Float64}, Matrix{Float64}, Vector{Vector{Float64}}}
     @info "Generating parameter space"
     param_configs = generate_hypercube(
         config.param_ranges,
@@ -14,7 +14,7 @@ function main(
     )
 
     @info "Solving model for each configuration"
-    solutions = []
+    simulations = []
     data = []
     for i = 1:N
         if i % 100 == 0
@@ -26,7 +26,7 @@ function main(
             config.simulation_config,
         )
         characteristics = extract_characteristics(Y, config.simulation_config)
-        push!(solutions, Y)
+        push!(simulations, Y)
         push!(data, characteristics)
     end
 
