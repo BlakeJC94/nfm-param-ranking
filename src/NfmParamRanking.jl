@@ -4,16 +4,18 @@ include("./Types.jl")
 include("./GenerateData.jl")
 include("./AnalyseResults.jl")
 
-using FileIO
-
-using HDF5
+using CSV
+using DataFrames
 using DecisionTree
+using FileIO
+using HDF5
 
 using .Types
 using .GenerateData
 
 function main()
     results_path = "./results.h5"
+    output_path = "./output.csv"
 
     config = Config(
         N=5,  # TODO  2_000_000
@@ -101,8 +103,25 @@ function main()
         param_configs,
     )
 
-    # TODO print results
-    # TODO save results
+    # print results
+    print_output(output)
+
+    # save results
+    table = DataFrame([(; name=name, (Symbol(k) => v for (k, v) in result)...) for (name, result) in output])
+    CSV.write(output_path, table)
+end
+
+# TODO utils
+function print_output(output::Dict{String, Vector{Tuple{String,Float64}}})
+    for (name, result) in output
+        println(name)
+        println("-"^length(name))
+        ranking = sort(result; by=last, rev=true)
+        for (param, score) in ranking
+            println("  ", rpad(param, 8), round(score, digits=4))
+        end
+        println()
+    end
 end
 
 # TODO utils
