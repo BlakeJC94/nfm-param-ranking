@@ -1,19 +1,22 @@
 module NfmParamRanking
 
+include("./Types.jl")
 include("./GenerateData.jl")
 include("./AnalyseResults.jl")
 
 using FileIO
 
 using HDF5
+using DecisionTree
 
-using .GenerateData: Config, SimulationConfig, ParameterRange
+using .Types
+using .GenerateData
 
 function main()
     results_path = "./results.h5"
 
     config = Config(
-        N=5,  # 2_000_000
+        N=5,  # TODO  2_000_000
         simulation_config=SimulationConfig(
             T0=10.0,
             T=20.0,
@@ -51,7 +54,52 @@ function main()
         )
     end
 
-    output = AnalyseResults.main(param_configs, labels)
+    output = AnalyseResults.main(
+        config,
+        [
+            ModelConfig(
+                name="seizure",
+                labels=labels[:,4],
+                model_type=RandomForestClassifier,
+                model_args=Dict(
+                     "n_trees"=>100,
+                     "min_samples_leaf"=>2000,
+                     "impurity_importance"=>true,
+                ),
+            ),
+            ModelConfig(
+                name="steady_state",
+                labels=labels[:,5],
+                model_type=RandomForestClassifier,
+                model_args=Dict(
+                     "n_trees"=>100,
+                     "min_samples_leaf"=>2000,
+                     "impurity_importance"=>true,
+                ),
+            ),
+            ModelConfig(
+                name="amplitude",
+                labels=labels[:,1],
+                model_type=RandomForestRegressor,
+                model_args=Dict(
+                     "n_trees"=>100,
+                     "min_samples_leaf"=>2000,
+                     "impurity_importance"=>true,
+                ),
+            ),
+            ModelConfig(
+                name="frequency",
+                labels=labels[:,2],
+                model_type=RandomForestRegressor,
+                model_args=Dict(
+                     "n_trees"=>100,
+                     "min_samples_leaf"=>2000,
+                     "impurity_importance"=>true,
+                ),
+            ),
+        ],
+        param_configs,
+    )
 end
 
 function save_results(

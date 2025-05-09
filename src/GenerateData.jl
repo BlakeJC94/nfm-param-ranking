@@ -1,28 +1,12 @@
 module GenerateData
 
 # %%
-using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks, Parameters
+using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks
+using ..Types
 
-@with_kw struct ParameterRange
-    name::Symbol
-    min::Float64
-    max::Float64
-end
-
-@with_kw struct SimulationConfig
-    T0::Float64  # Transient end time (discard signal up to this t value)
-    T::Float64   # Max simulation time
-    Fs::Float64  # Sampling frequency
-end
-
-@with_kw struct Config
-    N::Int64
-    simulation_config::SimulationConfig
-    param_ranges::Vector{ParameterRange}
-end
-
-
-function main(config::Config)::Tuple{Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
+function main(
+    config::Config,
+)::Tuple{Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
     @info "Generating parameter space"
     param_configs = generate_hypercube(
         config.param_ranges,
