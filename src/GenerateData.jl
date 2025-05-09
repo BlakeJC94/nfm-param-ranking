@@ -16,7 +16,7 @@ function main(
     @info "Solving model for each configuration"
     simulations = []
     data = []
-    for i = 1:N
+    for i = 1:config.N
         if i % 100 == 0
             @info "sim $(i)"
         end
@@ -42,8 +42,8 @@ end
 # %%
 
 function spect(
-    Y::AbstractVector{<:Real},
-)::AbstractVector{<:Real}
+    Y::AbstractVector{T},
+)::Vector{T} where {T <: Real}
     L = length(Y)
     S = fft(Y)
 
@@ -55,9 +55,9 @@ function spect(
 end
 
 function get_peaks_filtered_fallback(
-    data::AbstractVector{<:Real},
-    min_height::Real,
-)::Tuple{Vector{<:Integer}, Vector{<:Real}}
+    data::AbstractVector{T},
+    min_height::T,
+)::Tuple{Vector{<:Integer}, Vector{T}} where {T <: Real}
     inds, heights = findmaxima(data)
     if any(heights .> min_height)
         inds, heights = peakheights(inds, heights; min=min_height)
@@ -68,7 +68,7 @@ end
 function extract_characteristics(
     Y::Vector{Float64},
     simulation_config::SimulationConfig,
-)::Tuple{Real, Real, Real}
+)::Tuple{Float64, Float64, Float64}
     Fs, T0, T = simulation_config.Fs, simulation_config.T0, simulation_config.T
 
     L = length(Y)
@@ -135,8 +135,8 @@ function generate_hypercube(
 )::Matrix{Float64}
     d = length(param_ranges)
 
-    min_vals = getfeld.(param_ranges, :min)
-    max_vals = getfeld.(param_ranges, :max)
+    min_vals = getfield.(param_ranges, :min)
+    max_vals = getfield.(param_ranges, :max)
 
     range = max_vals - min_vals
     @assert all(range .> 0)
@@ -152,7 +152,7 @@ end
 function discretize(
     data::AbstractVector{T},
     edges::AbstractVector{T},
-)::AbstractVector{T} where T<:Real
+)::Vector{T} where T<:Real
     return [searchsortedlast(edges, x) for x in data] .- 1
 end
 
@@ -162,7 +162,7 @@ end
 A sigmoid function that relates the average postsynaptic potential of a given population to an
 average pulse density of action potentials outgoing from the population.
 """
-function sig(v::T, v0::T, e0::T, r::T)::T where T<:Real
+function sig(v::T, v0::T, e0::T, r::T)::T where {T<:Real}
     return 2 * e0 / (1 + exp(r * (v0 - v)))
 end
 
@@ -181,11 +181,11 @@ the interactions between them.
 Written for use with `DifferentialEquations.jl`
 """
 function jansen_ritt_wendling!(
-    dy::AbstractVector{T},
-    y::AbstractVector{T},
+    dy::AbstractArray{T,2},
+    y::AbstractArray{T,2},
     p::AbstractVector{T},
     t::T,
-)::AbstractVector{T} where {T <: Real}
+) where {T <: Real}
     y1, y2, y3, y4, y5, y6, y7, y8, y9, y10 = y
 
     A, B, G = p[1:3]
