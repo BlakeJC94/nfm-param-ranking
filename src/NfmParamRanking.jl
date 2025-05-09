@@ -62,9 +62,9 @@ function main()
                 labels=labels[:,4],
                 model_type=RandomForestClassifier,
                 model_args=Dict(
-                     "n_trees"=>100,
-                     "min_samples_leaf"=>2000,
-                     "impurity_importance"=>true,
+                     :n_trees=>100,
+                     :min_samples_leaf=>2000,
+                     :impurity_importance=>true,
                 ),
             ),
             ModelConfig(
@@ -72,9 +72,9 @@ function main()
                 labels=labels[:,5],
                 model_type=RandomForestClassifier,
                 model_args=Dict(
-                     "n_trees"=>100,
-                     "min_samples_leaf"=>2000,
-                     "impurity_importance"=>true,
+                     :n_trees=>100,
+                     :min_samples_leaf=>2000,
+                     :impurity_importance=>true,
                 ),
             ),
             ModelConfig(
@@ -82,9 +82,9 @@ function main()
                 labels=labels[:,1],
                 model_type=RandomForestRegressor,
                 model_args=Dict(
-                     "n_trees"=>100,
-                     "min_samples_leaf"=>2000,
-                     "impurity_importance"=>true,
+                     :n_trees=>100,
+                     :min_samples_leaf=>2000,
+                     :impurity_importance=>true,
                 ),
             ),
             ModelConfig(
@@ -92,9 +92,9 @@ function main()
                 labels=labels[:,2],
                 model_type=RandomForestRegressor,
                 model_args=Dict(
-                     "n_trees"=>100,
-                     "min_samples_leaf"=>2000,
-                     "impurity_importance"=>true,
+                     :n_trees=>100,
+                     :min_samples_leaf=>2000,
+                     :impurity_importance=>true,
                 ),
             ),
         ],

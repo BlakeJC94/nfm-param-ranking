@@ -24,9 +24,9 @@ end
 
 @with_kw struct ModelConfig
     name::String
-    labels::Vector{Real}
-    model_type::Function
-    model_args::Dict{String, Any}
+    labels::Vector{Float64}
+    model_type::Any
+    model_args::Dict{Symbol, Any}
 end
 
 end  # module Types
