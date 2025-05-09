@@ -1,11 +1,10 @@
 module GenerateData
 
 # %%
-using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations
+using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks
 
-function main()
+function main()::Tuple{Matrix{Real}, Matrix{Real}}
     N = 5 # 2_000_000
-    d = 11
     min_max_vals = [
         0.0 10.0;  # A
         0.0 50.0;  # B
@@ -24,35 +23,106 @@ function main()
     Fs = 500  # Sampling frequency
 
     @info "Generating parameter space"
-    param_configs = generate_hypercube(N, d, transpose(min_max_vals))
+    param_configs = generate_hypercube(min_max_vals, N)
 
     # TODO Solve each equation and save results to file
     @info "Solving model for each configuration"
+    solutions = []
     data = []
     for i = 1:N
-        @info "sim $(i)"
         if i % 100 == 0
             @info "sim $(i)"
         end
-
-        dt = 1/Fs  # Sampling period
-        y0 = zeros(10, 1)  # Initial conditions
-        param_config = param_configs[:, i]
-
-        prob = ODEProblem(jansen_ritt_wendling!, y0, (0, T), param_config)
-        sol = solve(prob, DP5(), dt=dt, adaptive=false)
-
-        Y = sol[2,:][T0*Fs:end] - sol[3,:][T0*Fs:end] - sol[4,:][T0*Fs:end]
-        push!(data, Y)
+        Y = solve_eq(jansen_ritt_wendling!, param_configs[i, :], Fs, T0, T)
+        characteristics = extract_characteristics(Y, Fs, T0, T)
+        push!(solutions, Y)
+        push!(data, characteristics)
     end
 
-    @info "Classifying simluations"
-    # TODO Classify simulations
-    labels = []
+    @info "labelling simluations"
+    data = reduce(vcat, [collect(t)' for t in data])
+    seizure = discretize(data[:,3], [0, 1.1, 10000])
+    steadystate = discretize(data[:,1], [0, 0.1, 10000])
 
-    return transpose(param_configs), labels
+    labels = hcat(data, seizure, steadystate)
+
+    return param_configs, labels
 end
 
+# %%
+
+function spect(
+    Y::AbstractVector{<:Real},
+)::AbstractVector{<:Real}
+    L = length(Y)
+    S = fft(Y)
+
+    P2 = abs.(S/L)
+
+    P1 = P2[1:floor(Int, L/2)+1]
+    P1[2:end-1] = 2*P1[2:end-1]
+    return P1
+end
+
+function get_peaks_filtered_fallback(
+    data::AbstractVector{<:Real},
+    min_height::Real,
+)::Tuple{Vector{<:Integer}, Vector{<:Real}}
+    inds, heights = findmaxima(data)
+    if any(heights .> min_height)
+        inds, heights = peakheights(inds, heights; min=min_height)
+    end
+    return inds, heights
+end
+
+function extract_characteristics(
+    Y::Vector{Float64},
+    Fs::Real,
+    T0::Real,
+    T::Real,
+)::Tuple{Real, Real, Real}
+    L = length(Y)
+    P1 = spect(Y)
+    amplitude = maximum(Y) - minimum(Y)
+    if amplitude < 0.1
+        frequency = 0.1
+        peaks = 0
+        return amplitude, frequency, peaks
+    end
+
+    min_height = maximum(P1[2:end]) / 10
+    inds, _ = get_peaks_filtered_fallback(P1, min_height)
+    index_max = inds[1]
+    frequency = index_max * (Fs/L)
+
+    peaks = length(maxima(Y)) / (frequency * (T - T0));
+
+    rem = peaks - floor(peaks)
+    if 0.2 < rem < 0.8
+        min_height = maximum(P1[2:end]) / 50
+        inds, _ = get_peaks_filtered_fallback(P1, min_height)
+        index_max = inds[1]
+        frequency = index_max * (Fs/L)
+    end
+
+    if frequency < 0.11
+        peaks = 0
+    end
+
+    return amplitude, frequency, peaks
+end
+
+# %%
+
+function solve_eq(func::Function, param_config::Vector{Float64}, Fs::Int64, T0::Int64, T::Int64)::Vector{Float64}
+    dt = 1/Fs  # Sampling period
+    y0 = zeros(10, 1)  # Initial conditions
+
+    prob = ODEProblem(func, y0, (0, T), param_config)
+    sol = solve(prob, DP5(), dt=dt, adaptive=false)
+
+    return sol[2,:][T0*Fs:end] - sol[3,:][T0*Fs:end] - sol[4,:][T0*Fs:end]
+end
 # %%
 
 """
@@ -61,33 +131,41 @@ end
 Generate a random Latin Hypercube with `N` points embedded in `d` dimensions within the ranges
 specified by the `(2 x d)` matrix `min_max_vals`.
 """
-function generate_hypercube(N::Int, d::Int, min_max_vals::AbstractArray{Float64,2})::Matrix{Float64}
-    @assert size(min_max_vals) == (2, d)
+function generate_hypercube(min_max_vals::AbstractArray{Float64,2}, N::Int)::Matrix{Float64}
+    d, _ = size(min_max_vals)
 
-    min_vals = min_max_vals[1, :]
-    range = min_max_vals[2, :] - min_vals
+    min_vals = min_max_vals[:, 1]
+    range = min_max_vals[:, 2] - min_vals
     @assert all(range .> 0)
     scale = diagm(range)
 
     sampler = QuasiMonteCarlo.LatinHypercubeSample()
     res = QuasiMonteCarlo.sample(N, d, sampler)
 
-    return min_vals .+ scale * res
+    return transpose(min_vals .+ scale * res)
 end
 
-"""
-    generate_hypercube(N::Int, d::Int)::Matrix{Float64}
+# """
+#     generate_hypercube(N::Int, d::Int)::Matrix{Float64}
 
-Generate a random Latin Hypercube with `N` points embedded in `d` dimensions within the ranges
-`[0, 1]` for each dimension.
-"""
-function generate_hypercube(N::Int, d::Int)::Matrix{Float64}
-    min_max_vals = zeros((2, d))
-    min_max_vals[2, :] .= 1
-    return generate_hypercube(N, d, min_max_vals)
+# Generate a random Latin Hypercube with `N` points embedded in `d` dimensions within the ranges
+# `[0, 1]` for each dimension.
+# """
+# function generate_hypercube(N::Int, d::Int)::Matrix{Float64}
+#     min_max_vals = zeros((2, d))
+#     min_max_vals[2, :] .= 1
+#     return generate_hypercube(N, d, min_max_vals)
+# end
+
+# # %%
+
+
+function discretize(
+    data::AbstractVector{T},
+    edges::AbstractVector{T},
+)::AbstractVector{T} where T<:Real
+    return [searchsortedlast(edges, x) for x in data] .- 1
 end
-
-# %%
 
 """
     sig(v, v0, e0, r)
@@ -151,4 +229,4 @@ function jansen_ritt_wendling!(dy, y, p, t)
 end
 
 # %%
-end # module GenerateData
+end # module Generate Data
