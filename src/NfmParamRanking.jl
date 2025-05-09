@@ -9,9 +9,11 @@ using DataFrames
 using DecisionTree
 using FileIO
 using HDF5
+using Printf
 
 using .Types
 using .GenerateData
+using .AnalyseResults
 
 function main()
     results_path = "./results.h5"
@@ -128,8 +130,8 @@ end
 function save_results(
     results_path::String,
     config::Config,
-    param_configs::Matrix{Real},,
-    labels::Matric{Real},
+    param_configs::Matrix{Float64},
+    labels::Matrix{Float64},
     simulations::Vector{Vector{Float64}},
 )
     h5open(results_path, "w") do file
@@ -139,10 +141,10 @@ function save_results(
 
         n_digits = length(string(length(simulations)))
         for (i, sim) in enumerate(simulations)
-            sim_group[@sprintf("%0*d", n_digits, i)] = sim
+            sim_group[lpad(i,n_digits,"0")] = sim
         end
 
-        g = create_group(h5file, "config")
+        g = create_group(file, "config")
 
         g["N"] = config.N
         g["simulation/T0"] = config.simulation_config.T0
@@ -162,8 +164,8 @@ end
 
 # TODO utils
 function load_results(
-    results_path::str,
-)::Tuple{Config, Matrix{Real}, Matrix{Real}, Vector{Vector{Float64}}}
+    results_path::String,
+)::Tuple{Config, Matrix{Float64}, Matrix{Float64}, Vector{Vector{Float64}}}
     @info "loading results"
 
     param_configs = Matrix{Float64}(undef, 0, 0)
@@ -181,25 +183,25 @@ function load_results(
         for (i, name) in enumerate(sort(collect(keys(sim_group))))
             simulations[i] = read(sim_group[name])
         end
+
+        g = file["config"]
+
+        N = read(g["N"])
+        T0 = read(g["simulation/T0"])
+        T = read(g["simulation/T"])
+        Fs = read(g["simulation/Fs"])
+        sim_config = SimulationConfig(T0=T0, T=T, Fs=Fs)
+
+        names = Symbol.(read(g["param_ranges/names"]))
+        mins = read(g["param_ranges/mins"])
+        maxs = read(g["param_ranges/maxs"])
+
+        param_ranges = [ParameterRange(name=names[i], min=mins[i], max=maxs[i])
+                        for i in eachindex(names)]
+
+        config = Config(N=N, simulation_config=sim_config, param_ranges=param_ranges)
+        return config, param_configs, labels, simulations
     end
-
-    g = h5file["config"]
-
-    N = read(g["N"])
-    T0 = read(g["simulation/T0"])
-    T = read(g["simulation/T"])
-    Fs = read(g["simulation/Fs"])
-    sim_config = SimulationConfig(T0=T0, T=T, Fs=Fs)
-
-    names = Symbol.(read(g["param_ranges/names"]))
-    mins = read(g["param_ranges/mins"])
-    maxs = read(g["param_ranges/maxs"])
-
-    param_ranges = [ParameterRange(name=names[i], min=mins[i], max=maxs[i])
-                    for i in eachindex(names)]
-
-    config = Config(N=N, simulation_config=sim_config, param_ranges=param_ranges)
-    return config, param_configs, labels, simulations
 end
 
 end # module NfmParamRanking
