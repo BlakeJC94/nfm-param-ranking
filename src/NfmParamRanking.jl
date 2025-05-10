@@ -20,7 +20,7 @@ function main()
     output_path = "./output.csv"
 
     config = Config(
-        N=5,  # TODO  2_000_000
+        N=20_000,
         simulation_config=SimulationConfig(
             T0=10.0,
             T=20.0,
