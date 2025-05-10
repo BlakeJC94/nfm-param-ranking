@@ -1,12 +1,21 @@
 module GenerateData
 
 # %%
-using QuasiMonteCarlo, Random, LinearAlgebra, DifferentialEquations, FFTW, Peaks
+using QuasiMonteCarlo
+using Random
+using LinearAlgebra
+using DifferentialEquations
+using FFTW
+using Peaks
+using DataFrames
+
 using ..Types
 
 function main(
     config::Config,
-)::Tuple{Matrix{Float64}, Matrix{Float64}, Vector{Vector{Float64}}}
+)::Tuple{DataFrame, DataFrame, Vector{Vector{Float64}}}
+    Random.seed!(1234)
+
     @info "Generating parameter space"
     param_configs = generate_hypercube(
         config.param_ranges,
@@ -15,27 +24,26 @@ function main(
 
     @info "Solving model for each configuration"
     simulations = []
-    data = []
-    for i = 1:config.N
+    labels = []
+    for i = 1:nrow(param_configs)
         if i % 100 == 0
             @info "sim $(i)"
         end
         Y = solve_eq(
             jansen_ritt_wendling!,
-            param_configs[i, :],
+            collect(param_configs[i, :]),
             config.simulation_config,
         )
         characteristics = extract_characteristics(Y, config.simulation_config)
         push!(simulations, Y)
-        push!(data, characteristics)
+        push!(labels, characteristics)
     end
+    labels = vcat(labels...)
 
     @info "labelling simluations"
-    data = reduce(vcat, [collect(t)' for t in data])
-    seizure = discretize(data[:,3], [0, 1.1, 10000])
-    steadystate = discretize(data[:,1], [0, 0.1, 10000])
+    labels.seizure = discretize(labels[:,:frequency], [0, 1.1, 10000])
+    labels.steady_state = discretize(labels[:,:amplitude], [0, 0.1, 10000])
 
-    labels = hcat(data, seizure, steadystate)
     return param_configs, labels, simulations
 end
 
@@ -68,7 +76,7 @@ end
 function extract_characteristics(
     Y::Vector{Float64},
     simulation_config::SimulationConfig,
-)::Tuple{Float64, Float64, Float64}
+)::DataFrame
     Fs, T0, T = simulation_config.Fs, simulation_config.T0, simulation_config.T
 
     L = length(Y)
@@ -99,7 +107,7 @@ function extract_characteristics(
         peaks = 0
     end
 
-    return amplitude, frequency, peaks
+    return DataFrame(amplitude=amplitude, frequency=frequency, peaks=peaks)
 end
 
 # %%
@@ -132,7 +140,7 @@ specified by the `(2 x d)` matrix `min_max_vals`.
 function generate_hypercube(
     param_ranges::Vector{ParameterRange},
     N::Int64,
-)::Matrix{Float64}
+)::DataFrame
     d = length(param_ranges)
 
     min_vals = getfield.(param_ranges, :min)
@@ -146,7 +154,7 @@ function generate_hypercube(
     sampler = QuasiMonteCarlo.LatinHypercubeSample()
     res = QuasiMonteCarlo.sample(N, d, sampler)
 
-    return transpose(min_vals .+ scale * res)
+    return DataFrame(transpose(min_vals .+ scale * res), [r.name for r in param_ranges])
 end
 
 function discretize(

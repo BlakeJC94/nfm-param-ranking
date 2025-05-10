@@ -8,8 +8,7 @@ include("./Utils.jl")
 using CSV
 using DataFrames
 using DecisionTree
-using FileIO
-using HDF5
+using Random
 
 using .Types
 using .AnalyseResults
@@ -64,7 +63,6 @@ function main()
         [
             ModelConfig(
                 name="seizure",
-                labels=labels[:,4],
                 model_type=RandomForestClassifier,
                 model_args=Dict(
                      :n_trees=>100,
@@ -74,7 +72,6 @@ function main()
             ),
             ModelConfig(
                 name="steady_state",
-                labels=labels[:,5],
                 model_type=RandomForestClassifier,
                 model_args=Dict(
                      :n_trees=>100,
@@ -84,7 +81,6 @@ function main()
             ),
             ModelConfig(
                 name="amplitude",
-                labels=labels[:,1],
                 model_type=RandomForestRegressor,
                 model_args=Dict(
                      :n_trees=>100,
@@ -94,7 +90,6 @@ function main()
             ),
             ModelConfig(
                 name="frequency",
-                labels=labels[:,2],
                 model_type=RandomForestRegressor,
                 model_args=Dict(
                      :n_trees=>100,
@@ -104,6 +99,7 @@ function main()
             ),
         ],
         param_configs,
+        labels,
     )
 
     # print results

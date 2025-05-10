@@ -3,6 +3,7 @@ export print_output, save_results, load_results
 
 using FileIO
 using HDF5
+using DataFrames
 
 using ..Types
 
@@ -47,16 +48,30 @@ function save_simulations(file::HDF5.File, simulations::Vector{Vector{Float64}})
     end
 end
 
+function save_dataframe(file::HDF5.File, path::String, df::DataFrame)
+    # Create a group for the DataFrame
+    g = create_group(file, path)
+
+    # Save column names and types
+    g["column_names"] = string.(names(df))
+    g["nrows"] = nrow(df)
+
+    # Save each column separately
+    for name in names(df)
+        g[string(name)] = df[!, name]
+    end
+end
+
 function save_results(
     results_path::String,
     config::Config,
-    param_configs::Matrix{Float64},
-    labels::Matrix{Float64},
+    param_configs::DataFrame,
+    labels::DataFrame,
     simulations::Vector{Vector{Float64}},
 )
     h5open(results_path, "w") do file
-        file["param_configs"] = param_configs
-        file["labels"] = labels
+        save_dataframe(file,"param_configs",param_configs)
+        save_dataframe(file,"labels",labels)
         save_simulations(file, simulations)
         save_config(file, config)
     end
@@ -92,14 +107,21 @@ function load_simulations(file::HDF5.File)::Vector{Vector{Float64}}
     return simulations
 end
 
+function load_dataframe(file::HDF5.File, path::String)::DataFrame
+    g = file[path]
+    col_names = Symbol.(read(g["column_names"]))
+    n = read(g["nrows"])
+    cols = [read(g[string(name)]) for name in col_names]
+    return DataFrame(cols, col_names)
+end
 
 function load_results(
     results_path::String,
-)::Tuple{Config, Matrix{Float64}, Matrix{Float64}, Vector{Vector{Float64}}}
+)::Tuple{Config, DataFrame, DataFrame, Vector{Vector{Float64}}}
     @info "loading results"
     config, param_configs, labels, simulations = h5open(results_path, "r") do file
-        param_configs = read(file["param_configs"])
-        labels = read(file["labels"])
+        param_configs = load_dataframe(file, "param_configs")
+        labels = load_dataframe(file, "labels")
         simulations = load_simulations(file)
         config = load_config(file)
         return config, param_configs, labels, simulations

@@ -40,7 +40,6 @@ end
 
 @with_kw struct ModelConfig
     name::String
-    labels::Vector{Float64}
     model_type::Any
     model_args::Dict{Symbol, Any}
 end
