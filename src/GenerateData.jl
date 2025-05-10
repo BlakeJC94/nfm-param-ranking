@@ -84,8 +84,8 @@ function extract_characteristics(
     amplitude = maximum(Y) - minimum(Y)
     if amplitude < 0.1
         frequency = 0.1
-        peaks = 0
-        return amplitude, frequency, peaks
+        peaks = 0.0
+        return DataFrame(amplitude=amplitude, frequency=frequency, peaks=peaks)
     end
 
     min_height = maximum(P1[2:end]) / 10
@@ -104,7 +104,7 @@ function extract_characteristics(
     end
 
     if frequency < 0.11
-        peaks = 0
+        peaks = 0.0
     end
 
     return DataFrame(amplitude=amplitude, frequency=frequency, peaks=peaks)
